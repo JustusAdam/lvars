@@ -7,7 +7,7 @@ EDGES      = 320000
 
 RAND_DATA  = /tmp/rand
 
-PBBSDIR    = ../../../pbbs/testData/graphData
+PBBSDIR    = ../../../../pbbs/testData/graphData
 
 # Generate random local graphs with $VERTICES vertices and $EDGES
 # edges, and dimension 5.  The graph is generated so that the
@@ -24,11 +24,11 @@ rand_data:
 	$(PBBSDIR)/randLocalGraph -m $(EDGES) -d 5 $(VERTICES) $(RAND_DATA)_$(EDGES)_$(VERTICES)
 
 benchmark.run: benchmark.hs
-	cabal install hsbencher
-	ghc -threaded benchmark.hs -o benchmark.run
+	stack exec -- ghc -threaded benchmark.hs -o benchmark.run
 
 run_benches: benchmark.run
-	./benchmark.run
+	stack build
+	stack exec --no-ghc-package-path -- ./benchmark.run
 
 clean_data:
 	-rm -f /tmp/rand*

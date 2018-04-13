@@ -13,15 +13,20 @@ import HSBencher.Types(BenchSpace(..), Benchmark(..), ParamSetting(..), DefaultP
                        -- compileOptsOnly, enumerateBenchSpace, toCompileFlags,
                        -- makeBuildID, BuildID, 
                       )
-import HSBencher.App (defaultMainWithBechmarks)
-
+--import HSBencher.App (defaultMainWithBechmarks)
+import HSBencher
+import Control.Monad
+import System.FilePath
+import System.Process
+import Control.Monad.IO.Class
 -- Temp:
 -- import Text.PrettyPrint.GenericPretty (Out(doc,docPrec), Generic)
+
 
 main :: IO ()
 main = do
   putStrLn$ "Exploring thread settings: " ++ show threadSelection
-  defaultMainWithBechmarks bls
+  defaultMainModifyConfig (addBenchmarks bls . \c -> c { buildMethods = [justRun] })
 
 --------------------------------------------------------------------------------
 -- Here are the actual benchmarks:
@@ -29,17 +34,24 @@ main = do
 
 allSettings = varyThreads defaultSettings
 
-stratSet = (And [allSettings,
-                 Set NoMeaning (CompileParam "bf-traverse-Strategies")])
+makeBenchmarks name = map (mkBench . show) [1,2,4,8,16,31,64]
+   where
+     mkBench p = mkBenchmark name ["none","/tmp/rand_320000_40000","10",p] space
+     space = And [allSettings, Set NoMeaning (CompileParam name)]
 
-monadparSet = (And [allSettings,
-                    Set NoMeaning (CompileParam "bf-traverse-monad-par")])
-
-lvarSet = (And [allSettings,
-                Set NoMeaning (CompileParam "bf-traverse-LVar")])
+justRun :: BuildMethod
+justRun = BuildMethod
+  { methodName = "run"
+  , canBuild = AnyFile
+  , concurrentBuild = False
+  , compile = \_conf _id flags _env path -> liftIO $ StandAloneBinary <$> readCreateProcess (proc "which" [takeBaseName path]) ""x
+  , clean = \_ _ _ -> pure ()
+  , setThreads = Nothing
+  }
+  
 
 bls :: [Benchmark DefaultParamMeaning]
-bls =
+bls = join
 
   -- # Arguments:
   -- #  - filename of graph
@@ -49,29 +61,10 @@ bls =
   ------------------------------------------------------------  
  -- Desktop configuration:
  ------------------------------------------------------------  
- [ Benchmark "name" ["none","/tmp/rand_320000_40000","10","1"] stratSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","2"] stratSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","4"] stratSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","8"] stratSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","16"] stratSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","32"] stratSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","64"] stratSet
-
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","1"] monadparSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","2"] monadparSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","4"] monadparSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","8"] monadparSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","16"] monadparSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","32"] monadparSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","64"] monadparSet
-
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","1"] lvarSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","2"] lvarSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","4"] lvarSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","8"] lvarSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","16"] lvarSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","32"] lvarSet
- , Benchmark "name" ["none","/tmp/rand_320000_40000","10","64"] lvarSet
+ [ makeBenchmarks "bf-traverse-Strategies"
+ , makeBenchmarks "bf-traverse-monad-par"
+ , makeBenchmarks "bf-traverse-LVar"
+ , makeBenchmarks "bf-traverse-ohua"
  ]
 
 --------------------------------------------------------------------------------
@@ -81,10 +74,7 @@ bls =
 -- Add the default Haskell compiler settings that we want:
 defaultSettings :: BenchSpace DefaultParamMeaning
 defaultSettings =
-  And [ Set NoMeaning (CompileParam "--disable-documentation")
-      , Set NoMeaning (CompileParam "--disable-library-profiling")
-      , Set NoMeaning (CompileParam "--disable-executable-profiling")
-      , Set NoMeaning (RuntimeParam "+RTS -s -qa -RTS")
+  And [ Set NoMeaning (RuntimeParam "+RTS -s -qa -RTS")
       ]
 
 -- TODO: make this an option:
